@@ -55,6 +55,7 @@ function warn(){
 function initialize(){
   info "Initializing KEYVOL.\n"
   read -s -p "  Passphrase for KEYVOL - leave empty to generate one: "
+  echo
   PASSPHRASE=${REPLY:-$(LC_ALL=C tr -dc 'A-Z1-9' < /dev/urandom | \
 	  tr -d "1IOS5U" | fold -w 30 | sed "-es/./ /"{1..26..5} | \
 	  cut -c2- | tr " " ":" | head -1)}
@@ -83,7 +84,7 @@ function initialize(){
 
 function mountKeystore(){
   read -s -p "Passphrase for keystore: " PASSPHRASE
-  echo >&2
+  echo
   info "Checking out and decrypting Keystore"
   cp /pgp-ca/KEYVOL /
   echo $PASSPHRASE | cryptsetup luksOpen /KEYVOL keyringvol - || { error "Failed to decrypt Keystore. Maybe bad passphrase?"; return 1; }
@@ -134,6 +135,7 @@ function pgpMakeEASkeys(){
   KEYFP=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^fpr:/ { print $10; exit }')
   info "Creating new subkeys for encryption, authentication and signing:\n"
   read -s -p "Please provide certify key's passphrase: " CERTIFY_PASS
+  echo
   for SUBKEY in sign encrypt auth 
   do
 	  info "  creating $SUBKEY key: "
@@ -158,6 +160,7 @@ function pgpRevKey(){
   read -p "Type YES (all uppercase) to continue: "
   [ "$REPLY" != "YES" ] && return 1
   read -s -p "Please provide certify key's passphrase: " CERTIFY_PASS
+  echo
   info "Starting revocation: " 
   gpg --command-fd=0 --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --edit-key $KEYID &>/dev/null <<EOF
 key 1
@@ -197,6 +200,7 @@ function pgpChgKeyExp(){
   KEYFP=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^fpr:/ { print $10; exit }')
   info "Going to extend lifetime of your EAS subkeys.\n"
   read -s -p "Please provide certify key's passphrase: " CERTIFY_PASS
+  echo
   read -p "Please enter expiration in years: " EXP
   info "Starting key edit: " 
   gpg --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --quick-set-expire "$KEYFP" "$EXP" "*" &>/dev/null
@@ -238,8 +242,10 @@ function ykChangePIN(){
   if [ "$REPLY" = "YES" ]
   then
     read -s -p "New user PIN - Leave empty to generate a random one: " 
+    echo
     UPIN=${REPLY:-$(LC_ALL=C tr -dc '0-9' < /dev/urandom | fold -w6 | head -1)}
     read -s -p "New admin PIN - Leave empty to generate a random one: " 
+    echo
     APIN=${REPLY:-$(LC_ALL=C tr -dc '0-9' < /dev/urandom | fold -w8 | head -1)}
     info "Setting admin PIN to $APIN: "
     ykman openpgp access change-admin-pin 2>/dev/null <<EOF 
@@ -258,7 +264,7 @@ EOF
     then
       if [ -r $GNUPGHOME/yubikey-$ykserial.txt ]
       then
-        grep -v PIN $GNUPGHOME/yubikey-$ykserial.txt > $GNUPGHOME/yubikey-$ykserial.txt
+        grep -v PIN $GNUPGHOME/yubikey-$ykserial.txt > $GNUPGHOME/temp && mv $GNUPGHOME/temp $GNUPGHOME/yubikey-$ykserial.txt
           cat <<EOF >>$GNUPGHOME/yubikey-$ykserial.txt
 Admin PIN: $APIN
 Initial user PIN: $UPIN
@@ -299,7 +305,9 @@ function ykProvision(){
   read -p "Cardholder's full name: " YKCHOLDER
   read -p "Cardholder's email address: " YKLOGIN
   read -s -p "Yubikey admin PIN: " APIN
+  echo
   read -s -p "PGP certification passphrase: " CERTIFYPASS
+  echo
 
   info "Setting smartcard data: "
   gpg --batch --passphrase $APIN --command-fd=0 --pinentry-mode=loopback --edit-card 2>/dev/null <<EOF

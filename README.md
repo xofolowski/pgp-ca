@@ -26,7 +26,7 @@ Reprovisioning of remaining tokens in such cases can easily be accomplished with
 3. Adjust contents of `data/conf/pgp-ca/pgp-ca.env` to your needs
 4. Run the container:
    ````
-   # docker compose run pgp-ca
+   # docker compose run --rm pgp-ca
     ````
     If data/conf/pgp-ca/KEYVOL does not yet exist, pgp-ca will set it up and LUKS-encrypt it.
     Otherwise, pgp-ca will ask for the LUKS passphrase, decrypt and mount the KEYVOL.
