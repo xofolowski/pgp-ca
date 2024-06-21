@@ -1,7 +1,7 @@
 #!/bin/bash
 export UPIN=123456 # default
 export APIN=12345678 # default
-export GPGHOME=/.gpg
+export GNUPGHOME=/.gpg
 
 function die(){
   echo >&2
@@ -14,7 +14,7 @@ function die(){
     pkill gpg-agent
     pkill pcscd
     sleep 1
-    umount $GPGHOME &>/dev/null 
+    umount $GNUPGHOME &>/dev/null 
     cryptsetup luksClose keyringvol &>/dev/null
     ok
     info "Backing out Keystore to shared volume. "
@@ -72,10 +72,10 @@ function initialize(){
   mkfs.ext4 /dev/mapper/keyringvol &>/dev/null || die "Failed to create filesystem." 1
   rcStat $?
   info "  Mounting file system: "
-  mount /dev/mapper/keyringvol $GPGHOME || die "Failed to mount KEYVOL." 1
+  mount /dev/mapper/keyringvol $GNUPGHOME || die "Failed to mount KEYVOL." 1
   rcStat $?
   info "  Preparing GPG config: "
-  cp /gpg.conf $GPGHOME/ &>/dev/null || die "Failed to prepare GPG config." 1
+  cp /gpg.conf $GNUPGHOME/ &>/dev/null || die "Failed to prepare GPG config." 1
   rcStat $?
   info "This is the keystore's encryption passphrase: \033[31m$PASSPHRASE\033[m\n"
   warn "Make sure to note this passphrase down and store it securely!\n"
@@ -89,7 +89,7 @@ function mountKeystore(){
   echo $PASSPHRASE | cryptsetup luksOpen /KEYVOL keyringvol - || { error "Failed to decrypt Keystore. Maybe bad passphrase?"; return 1; }
   rcStat $?
   info "Mounting Keystore"
-  mount /dev/mapper/keyringvol $GPGHOME || { error "Failed to mount Keystore."; return 1; }	 
+  mount /dev/mapper/keyringvol $GNUPGHOME || { error "Failed to mount Keystore."; return 1; }	 
   rcStat $?
   return 0
 }
@@ -123,8 +123,8 @@ function pgpMakeCkey(){
   echo -e "\033[34m"
   cat /gpg.log
   echo -e "\033[m"
-  info "Backing up certify key to $GPGHOME/$KEYID-Certify.key: "
-  gpg --output $GPGHOME/$KEYID-Certify.key --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --armor --export-secret-keys $KEYID
+  info "Backing up certify key to $GNUPGHOME/$KEYID-Certify.key: "
+  gpg --output $GNUPGHOME/$KEYID-Certify.key --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --armor --export-secret-keys $KEYID
   rcStat $?
 }
 
@@ -133,7 +133,7 @@ function pgpMakeEASkeys(){
   KEYID=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^pub:/ { print $5; exit }')
   KEYFP=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^fpr:/ { print $10; exit }')
   info "Creating new subkeys for encryption, authentication and signing:\n"
-  read -p "Please provide certify key's passphrase: " CERTIFY_PASS
+  read -s -p "Please provide certify key's passphrase: " CERTIFY_PASS
   for SUBKEY in sign encrypt auth 
   do
 	  info "  creating $SUBKEY key: "
@@ -146,8 +146,8 @@ function pgpMakeEASkeys(){
   echo -e "\033[m"
   info "The following keys do now exist: \n"
   gpg -K
-  info "Backing up subkeys to $GPGHOME/$(date +%Y-%m-%d)_$KEYID-Subkeys.key: "
-  gpg --output $GPGHOME/$(date +%Y-%m-%d)_$KEYID-Subkeys.key --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --armor --export-secret-subkeys $KEYID
+  info "Backing up subkeys to $GNUPGHOME/$(date +%Y-%m-%d)_$KEYID-Subkeys.key: "
+  gpg --output $GNUPGHOME/$(date +%Y-%m-%d)_$KEYID-Subkeys.key --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --armor --export-secret-subkeys $KEYID
   rcStat $?
 }
 
@@ -157,7 +157,7 @@ function pgpRevKey(){
   warn "THIS CANNOT BE UNDONE!\n"
   read -p "Type YES (all uppercase) to continue: "
   [ "$REPLY" != "YES" ] && return 1
-  read -p "Please provide certify key's passphrase: " CERTIFY_PASS
+  read -s -p "Please provide certify key's passphrase: " CERTIFY_PASS
   info "Starting revocation: " 
   gpg --command-fd=0 --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --edit-key $KEYID &>/dev/null <<EOF
 key 1
@@ -196,7 +196,7 @@ EOF
 function pgpChgKeyExp(){
   KEYFP=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^fpr:/ { print $10; exit }')
   info "Going to extend lifetime of your EAS subkeys.\n"
-  read -p "Please provide certify key's passphrase: " CERTIFY_PASS
+  read -s -p "Please provide certify key's passphrase: " CERTIFY_PASS
   read -p "Please enter expiration in years: " EXP
   info "Starting key edit: " 
   gpg --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --quick-set-expire "$KEYFP" "$EXP" "*" &>/dev/null
@@ -233,13 +233,13 @@ function ykChangePIN(){
   checkYK || return 1
   warn "This will change DEFAULT user and admin PINs of your yubikey's openpgp interface!\n"
   warn "Type YES (all uppercase) to continue: "
-  read ans
+  read 
   echo >&2
-  if [ "$ans" = "YES" ]
+  if [ "$REPLY" = "YES" ]
   then
-    read -p "New user PIN - Leave empty to generate a random one: " 
+    read -s -p "New user PIN - Leave empty to generate a random one: " 
     UPIN=${REPLY:-$(LC_ALL=C tr -dc '0-9' < /dev/urandom | fold -w6 | head -1)}
-    read -p "New admin PIN - Leave empty to generate a random one: " 
+    read -s -p "New admin PIN - Leave empty to generate a random one: " 
     APIN=${REPLY:-$(LC_ALL=C tr -dc '0-9' < /dev/urandom | fold -w8 | head -1)}
     info "Setting admin PIN to $APIN: "
     ykman openpgp access change-admin-pin 2>/dev/null <<EOF 
@@ -256,15 +256,15 @@ $UPIN
 EOF
     if rcStat $?
     then
-      if [ -r $GPGHOME/yubikey-$ykserial.txt ]
+      if [ -r $GNUPGHOME/yubikey-$ykserial.txt ]
       then
-        grep -v PIN $GPGHOME/yubikey-$ykserial.txt > $GPGHOME/yubikey-$ykserial.txt
-          cat <<EOF >>$GPGHOME/yubikey-$ykserial.txt
+        grep -v PIN $GNUPGHOME/yubikey-$ykserial.txt > $GNUPGHOME/yubikey-$ykserial.txt
+          cat <<EOF >>$GNUPGHOME/yubikey-$ykserial.txt
 Admin PIN: $APIN
 Initial user PIN: $UPIN
 EOF
       else
-         cat <<EOF >$GPGHOME/yubikey-$ykserial.txt
+         cat <<EOF >$GNUPGHOME/yubikey-$ykserial.txt
 Cardholder Name: $YKCHOLDER 
 Cardholder Email: $YKLOGIN
 Admin PIN: $APIN
@@ -280,15 +280,15 @@ function ykReset(){
   checkYK || return 1
   warn "This will reset the yubikey's openpgp application to factory default!\n"
   warn "Type YES (all uppercase) to continue: "
-  read ans
+  read 
   echo >&2
-  if [ "$ans" = "YES" ]
+  if [ "$REPLY" = "YES" ]
   then
     info "Resetting yubikey: " 
     out=$(echo "y" | ykman openpgp reset 2>/dev/null)
     rcStat $?
     echo $out
-    rm $GPGHOME/yubikey-$ykserial.txt &>/dev/null
+    rm $GNUPGHOME/yubikey-$ykserial.txt &>/dev/null
   fi
 }
 
@@ -298,8 +298,8 @@ function ykProvision(){
   info "Personalizing yubikey for identity $IDENTITY: \n"
   read -p "Cardholder's full name: " YKCHOLDER
   read -p "Cardholder's email address: " YKLOGIN
-  read -p "Yubikey admin PIN: " APIN
-  read -p "PGP certification passphrase: " CERTIFYPASS
+  read -s -p "Yubikey admin PIN: " APIN
+  read -s -p "PGP certification passphrase: " CERTIFYPASS
 
   info "Setting smartcard data: "
   gpg --batch --passphrase $APIN --command-fd=0 --pinentry-mode=loopback --edit-card 2>/dev/null <<EOF
@@ -313,7 +313,7 @@ $YKCHOLDER
 quit
 EOF
   rcStat $? || die "Could not personalize yubikey."
-  cat <<EOF >$GPGHOME/yubikey-$ykserial.txt
+  cat <<EOF >$GNUPGHOME/yubikey-$ykserial.txt
 Cardholder Name: $YKCHOLDER 
 Cardholder Email: $YKLOGIN
 Admin PIN: $APIN
@@ -416,7 +416,7 @@ EOF
       pkill gpg-agent
       pkill pcscd
       sleep 1
-      cd / && umount $GPGHOME && cryptsetup luksClose keyringvol
+      cd / && umount $GNUPGHOME && cryptsetup luksClose keyringvol
       rcStat $?
       info "Backing out keystore to shared volume: "
       mv /KEYVOL /pgp-ca/ && ok
@@ -462,11 +462,11 @@ EOF
     "p")
       if checkYK
       then
-        if [ -r $GPGHOME/yubikey-$ykserial.txt ]
+        if [ -r $GNUPGHOME/yubikey-$ykserial.txt ]
         then
           info "This is the configuration of currently detected yubikey:\n"
           echo -e "\033[36m"
-          cat $GPGHOME/yubikey-$ykserial.txt
+          cat $GNUPGHOME/yubikey-$ykserial.txt
           echo -e "\033[m"
         else
           warn "No configuration found for key with serial $ykserial!\n"
