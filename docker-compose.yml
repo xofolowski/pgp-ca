@@ -1,0 +1,16 @@
+services:
+  pgp-ca:
+    build: 
+      context: ./data/Dockerfiles/pgp-ca/
+    privileged: true
+    stdin_open: true 
+    tty: true
+    env_file: "data/conf/pgp-ca/pgp-ca.env"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "2g"
+    volumes:
+      - "./data/conf/pgp-ca:/pgp-ca"
+      - "/etc/localtime:/etc/localtime"
