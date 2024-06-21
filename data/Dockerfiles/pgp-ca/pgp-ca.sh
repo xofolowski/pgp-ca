@@ -411,6 +411,7 @@ do
   9) Change EAS subkeys' expiration date
   R) Revoke EAS subkeys
   p) Print yubikey info
+  P) Print info for all known yubikeys
   s) Open an interactive shell
   e) Clean up and exit 
 EOF
@@ -480,6 +481,16 @@ EOF
           warn "No configuration found for key with serial $ykserial!\n"
         fi
       fi
+    ;;
+    "P")
+      info "These are the configurations of all currently known yubikeys:\n"
+      echo -e "\033[36m"
+      for f in $GNUPGHOME/yubikey-*.txt
+      do
+        echo "===================="
+        cat $f
+      done
+      echo -e "\033[m"
     ;;
     s)
       info "Entering Shell.\n"
