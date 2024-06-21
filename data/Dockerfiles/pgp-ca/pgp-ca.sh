@@ -266,16 +266,17 @@ EOF
       then
         grep -v PIN $GNUPGHOME/yubikey-$ykserial.txt > $GNUPGHOME/temp && mv $GNUPGHOME/temp $GNUPGHOME/yubikey-$ykserial.txt
           cat <<EOF >>$GNUPGHOME/yubikey-$ykserial.txt
-Admin PIN: $APIN
+Admin PIN:        $APIN
 Initial user PIN: $UPIN
 EOF
       else
          cat <<EOF >$GNUPGHOME/yubikey-$ykserial.txt
-Cardholder Name: $YKCHOLDER 
+Serial#:          $ykserial
+Cardholder Name:  $YKCHOLDER 
 Cardholder Email: $YKLOGIN
-Admin PIN: $APIN
+PGP Key ID:       0x$KEYID
+Admin PIN:        $APIN
 Initial user PIN: $UPIN
-PGP Key ID: $KEYID
 EOF
       fi
     fi
@@ -322,11 +323,12 @@ quit
 EOF
   rcStat $? || die "Could not personalize yubikey."
   cat <<EOF >$GNUPGHOME/yubikey-$ykserial.txt
-Cardholder Name: $YKCHOLDER 
+Serial#:          $ykserial
+Cardholder Name:  $YKCHOLDER 
 Cardholder Email: $YKLOGIN
-Admin PIN: $APIN
+PGP Key ID:       0x$KEYID
+Admin PIN:        $APIN
 Initial user PIN: $UPIN
-PGP Key ID: $KEYID
 EOF
   info "Writing subkeys of key ID $KEYID to yubikey. \n"
   info "Exporting signature key: "
