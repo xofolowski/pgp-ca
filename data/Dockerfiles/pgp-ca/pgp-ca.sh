@@ -48,8 +48,10 @@ function rcStat(){
   if [ $1 -eq 0 ]
   then
     ok
+    return 0
   else
     fail
+    return 1
   fi
 }
 
@@ -67,7 +69,7 @@ function warn(){
 
 function initialize(){
   info "Initializing KEYVOL.\n"
-  read -s -p "  Passphrase for KEYVOL - leave empty to generate one: "
+  read -s -p "Passphrase for KEYVOL - leave empty to generate one: "
   echo
   PASSPHRASE=${REPLY:-$(LC_ALL=C tr -dc 'A-Z1-9' < /dev/urandom | \
 	  tr -d "1IOS5U" | fold -w 30 | sed "-es/./ /"{1..26..5} | \
@@ -115,7 +117,7 @@ function checkYK(){
     error "No yubikey found.\n"
     return 1
   fi
-  info "Found yubikey with serial: $ykserial\n"
+  info "Found yubikey with serial: $PURPLE$ykserial$NOCOL\n"
   return 0
 }
 
@@ -127,27 +129,31 @@ function pgpMakeCkey(){
   info "This is the certify key's passphrase: $RED$CERTIFY_PASS$NOCOL\n"
   warn "Make sure to note this passphrase down and store it securely!\n"
   info "Creating new certify key: "
-  gpg --batch --passphrase "$CERTIFY_PASS" --quick-generate-key "$IDENTITY" "$KEY_TYPE" cert never &>/gpg.log || die "Failed to create key." 100
-  rcStat $?
-  KEYID=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^pub:/ { print $5; exit }')
-  KEYFP=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^fpr:/ { print $10; exit }')
-  echo -e "$PURPLE"
-  printf "\nKey ID: %40s\nKey FP: %40s\n\n" "$KEYID" "$KEYFP"
-  echo -e "$NOCOL"
-  info "Certify key created successfully.\n"
-  info "This was gpg's output:\n"
-  echo -e "$PURPLE"
-  cat /gpg.log
-  echo -e "$NOCOL"
-  info "Backing up certify key to $GNUPGHOME/$KEYID-Certify.key: "
-  gpg --output $GNUPGHOME/$KEYID-Certify.key --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --armor --export-secret-keys $KEYID
-  rcStat $?
+  gpg --batch --passphrase "$CERTIFY_PASS" --quick-generate-key "$IDENTITY" "$KEY_TYPE" cert never >/gpg.log 2>&1
+  if rcStat $?
+  then 
+    info "Certify key created successfully with following key ID and fingerprint:\n"
+    KEYID=$(gpg -k --with-colons "$IDENTITY" 2>/dev/null | awk -F: '/^pub:/ { print $5; exit }')
+    KEYFP=$(gpg -k --with-colons "$IDENTITY" 2>/dev/null | awk -F: '/^fpr:/ { print $10; exit }')
+    echo -e "$PURPLE"
+    printf "Key ID: %40s\nKey FP: %40s\n" "$KEYID" "$KEYFP"
+    echo -e "$NOCOL"
+    info "Backing up certify key to $PURPLE$GNUPGHOME/$KEYID-Certify.key$NOCOL: "
+    gpg --output $GNUPGHOME/$KEYID-Certify.key --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --armor --export-secret-keys $KEYID
+    rcStat $?
+  else
+    warn "No certification key created!\n"
+    info "This was gpg's output:\n"
+    echo -e "$RED"
+    cat /gpg.log
+    echo -e "$NOCOL"
+  fi
 }
 
 function pgpMakeEASkeys(){
   :>/gpg.log
-  KEYID=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^pub:/ { print $5; exit }')
-  KEYFP=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^fpr:/ { print $10; exit }')
+  KEYID=$(gpg -k --with-colons "$IDENTITY" 2>/dev/null | awk -F: '/^pub:/ { print $5; exit }')
+  KEYFP=$(gpg -k --with-colons "$IDENTITY" 2>/dev/null | awk -F: '/^fpr:/ { print $10; exit }')
   info "Creating new subkeys for encryption, authentication and signing:\n"
   read -s -p "Please provide certify key's passphrase: " CERTIFY_PASS
   echo
@@ -165,13 +171,13 @@ function pgpMakeEASkeys(){
   echo -e "$PURPLE"
   gpg -K
   echo -e "$NOCOL"
-  info "Backing up subkeys to $GNUPGHOME/$(date +%Y-%m-%d)_$KEYID-Subkeys.key: "
+  info "Backing up subkeys to $PURPLE$GNUPGHOME/$(date +%Y-%m-%d)_$KEYID-Subkeys.key$NOCOL:"
   gpg --output $GNUPGHOME/$(date +%Y-%m-%d)_$KEYID-Subkeys.key --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --armor --export-secret-subkeys $KEYID
   rcStat $?
 }
 
 function pgpRevKey(){
-  KEYID=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^pub:/ { print $5; exit }')
+  KEYID=$(gpg -k --with-colons "$IDENTITY" 2>/dev/null | awk -F: '/^pub:/ { print $5; exit }')
   warn "This will revoke all your subkeys and export revoked keys to a keyserver.\n"
   warn "THIS CANNOT BE UNDONE!\n"
   read -p "Type YES (all uppercase) to continue: "
@@ -192,7 +198,7 @@ save
 EOF
   rcStat $?
   pgpExportKey $(date +%Y-%m-%d).pub-revoked.asc  
-  info "Publishing revoked key ID $KEYID to keyserver $KEYSERVER: "
+  info "Publishing revoked key ID $PURPLE$KEYID$NOCOL to keyserver $KEYSERVER: "
   gpg --send-keys --keyserver $KEYSERVER "$KEYID" &>/dev/null 
   if rcStat $?
   then
@@ -228,12 +234,12 @@ function pgpChgKeyExp(){
 }
 
 function pgpExportKey(){
-  KEYID=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^pub:/ { print $5; exit }')
-  info "Exporting public key ID $KEYID: "
+  KEYID=$(gpg -k --with-colons "$IDENTITY" 2>/dev/null | awk -F: '/^pub:/ { print $5; exit }')
+  info "Exporting public key ID $PURPLE$KEYID$NOCOL: "
   gpg --export --armor "$KEYID" > /pgp-ca/${KEYID}.$1  
   if rcStat $? 
   then
-    info "Public key can now be found in mounted volume (${KEYID}.$1)"
+    info "Public key can now be found in mounted volume ($PURPLE${KEYID}.$1$NOCOL)"
     return 0
   else
     return 1
@@ -254,14 +260,14 @@ function ykChangePIN(){
     read -s -p "New admin PIN - Leave empty to generate a random one: " 
     echo
     APIN=${REPLY:-$(LC_ALL=C tr -dc '0-9' < /dev/urandom | fold -w8 | head -1)}
-    info "Setting admin PIN to $APIN: "
+    info "Setting admin PIN to $RED$APIN$NOCOL: "
     ykman openpgp access change-admin-pin 2>/dev/null <<EOF 
 12345678
 $APIN
 $APIN
 EOF
     rcStat $?
-    info "Setting user PIN to $UPIN: "
+    info "Setting user PIN to $RED$UPIN$NOCOL: "
     ykman openpgp access change-pin 2>/dev/null <<EOF
 123456
 $UPIN
@@ -311,15 +317,16 @@ function ykReset(){
 }
 
 function ykProvision(){
-  KEYID=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^pub:/ { print $5; exit }')
+  KEYID=$(gpg -k --with-colons "$IDENTITY" 2>/dev/null | awk -F: '/^pub:/ { print $5; exit }')
   checkYK || return 1
-  info "Personalizing yubikey for identity $IDENTITY: \n"
+  info "Personalizing yubikey for identity $PURPLE$IDENTITY$NOCOL: \n"
   read -p "Cardholder's full name: " YKCHOLDER
   read -p "Cardholder's email address: " YKLOGIN
   read -s -p "Yubikey admin PIN: " APIN
   echo
-  read -s -p "PGP certification passphrase: " CERTIFYPASS
-  echo
+ # due to a bug in GPG ("gpg: KEYTOCARD failed: Invalid time") we cannot pass the passphrase via STDIN
+ # read -s -p "PGP certification passphrase: " CERTIFYPASS
+ # echo
 
   info "Setting smartcard data: "
   gpg --batch --passphrase $APIN --command-fd=0 --pinentry-mode=loopback --edit-card 2>/dev/null <<EOF
@@ -341,33 +348,36 @@ PGP Key ID:       0x$KEYID
 Admin PIN:        $APIN
 Initial user PIN: $UPIN
 EOF
-  info "Writing subkeys of key ID $KEYID to yubikey. \n"
-  info "Exporting signature key: "
+  info "Writing subkeys of key ID $PURPLE$KEYID$NOCOL to yubikey. \n"
+  warn "You will have to provide both, Yubikey admin PIN and ccertification passphrase, three times!\n"
+  read -p "Press <enter> to proceed:"
+  info "  Exporting signature key: "
   cat <<EOF > /tmp/gpg-cmd
 key 1
 keytocard
 1
 EOF
-  gpg --command-file /tmp/gpg-cmd --edit-key $KEYID 2>/dev/null 
-  rcStat $? || die "Could not provison key to yubikey."
+  gpg --command-file /tmp/gpg-cmd --batch --edit-key $KEYID &>/dev/null 
+  rcStat $? || return 1
 
-  info "Exporting encryption key: "
+  info "  Exporting encryption key: "
   cat <<EOF > /tmp/gpg-cmd
 key 2
 keytocard
 2
 EOF
-  gpg --command-file /tmp/gpg-cmd --edit-key $KEYID 2>/dev/null 
-  rcStat $? || die "Could not provison key to yubikey."
+  gpg --command-file /tmp/gpg-cmd --batch --edit-key $KEYID &>/dev/null 
+  rcStat $? || return 1
 
-  info "Exporting authentication key: "
+  info "  Exporting authentication key: "
    cat <<EOF > /tmp/gpg-cmd
 key 3
 keytocard
 3
 EOF
-  gpg --command-file /tmp/gpg-cmd --edit-key $KEYID 2>/dev/null 
-  rcStat $? || die "Could not provison key to yubikey."
+  gpg --command-file /tmp/gpg-cmd --batch --edit-key $KEYID &>/dev/null 
+  rcStat $? || return 1
+  return 0
 }
 
 ### main ###
@@ -419,7 +429,7 @@ do
   4) Export public key
   5) Reset yubikey to factory default 
   6) Set yubikey PINs
-  7) Provison keys to yubikey
+  7) Provision keys to yubikey
   8) Export keys to keyserver
   9) Change EAS subkeys' expiration date
   R) Revoke EAS subkeys
@@ -467,10 +477,10 @@ EOF
       ykChangePIN
     ;;
     "7")
-      ykProvision
+      ykProvision || error "Failed to provision Yubikey!\n"
     ;;
     "8")
-      KEYID=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^pub:/ { print $5; exit }')
+      KEYID=$(gpg -k --with-colons "$IDENTITY" 2>/dev/null | awk -F: '/^pub:/ { print $5; exit }')
       info "Publishing key ID $KEYID for identity $IDENTITY to keyserver $KEYSERVER: "
       gpg --send-keys --keyserver $KEYSERVER "$KEYID" &>/dev/null
       rcStat $?
@@ -501,7 +511,7 @@ EOF
       for f in $GNUPGHOME/yubikey-*.txt
       do
         echo "===================="
-        cat $f
+        cat $f 2>/dev/null || error "Cannot find any configurations!\n"
       done
       echo -e "$NOCOL"
     ;;
