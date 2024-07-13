@@ -2,6 +2,19 @@
 export UPIN=123456 # default
 export APIN=12345678 # default
 export GNUPGHOME=/.gpg
+export RED="\033[31m"
+export GREEN="\033[32m"
+export YELLOW="\033[33m"
+export BLUE="\033[34m"
+export PURPLE="\033[35m"
+export CYAN="\033[36m"
+export REDBG="\033[41m"
+export GREENBG="\033[42m"
+export YELLOWBG="\033[43m"
+export BLUEBG="\033[44m"
+export PURPLEBG="\033[45m"
+export CYANBG="\033[46m"
+export NOCOL="\033[m"
 
 function die(){
   echo >&2
@@ -24,11 +37,11 @@ function die(){
 }
 
 function fail(){
-  echo -e "\033[31m[failed]\033[m" >&2
+  echo -e "\033[250D\033[72C${RED}[failed]$NOCOL" >&2
 }
 
 function ok(){
-  echo -e "\033[32m[ok]\033[m" >&2
+  echo -e "\033[250D\033[76C${GREEN}[ok]$NOCOL" >&2
 }
 
 function rcStat(){
@@ -41,15 +54,15 @@ function rcStat(){
 }
 
 function error(){
-  echo -n -e "\033[31m[ERROR]\033[m $1 " >&2
+  echo -n -e "${RED}[ERROR]$NOCOL $1" >&2
 }
 
 function info(){
-  echo -n -e "\033[35m[INFO]\033[m $1 " >&2
+  echo -n -e "${BLUE}[INFO]$NOCOL $1" >&2
 }
 
 function warn(){
-  echo -n -e "\033[33m[WARNING]\033[m $1 " >&2
+  echo -n -e "${YELLOW}[WARNING]$NOCOL $1" >&2
 }
 
 function initialize(){
@@ -78,7 +91,7 @@ function initialize(){
   info "  Preparing GPG config: "
   cp /gpg.conf $GNUPGHOME/ &>/dev/null || die "Failed to prepare GPG config." 1
   rcStat $?
-  info "This is the keystore's encryption passphrase: \033[31m$PASSPHRASE\033[m\n"
+  info "This is the keystore's encryption passphrase: $RED$PASSPHRASE$NOCOL\n"
   warn "Make sure to note this passphrase down and store it securely!\n"
 }
 
@@ -111,19 +124,21 @@ function pgpMakeCkey(){
   CERTIFY_PASS=$(LC_ALL=C tr -dc 'A-Z1-9' < /dev/urandom | \
 	  tr -d "1IOS5U" | fold -w 30 | sed "-es/./ /"{1..26..5} | \
 	  cut -c2- | tr " " "-" | head -1) 
-  info "This is the certify key's passphrase: \033[31m$CERTIFY_PASS\033[m\n"
+  info "This is the certify key's passphrase: $RED$CERTIFY_PASS$NOCOL\n"
   warn "Make sure to note this passphrase down and store it securely!\n"
   info "Creating new certify key: "
   gpg --batch --passphrase "$CERTIFY_PASS" --quick-generate-key "$IDENTITY" "$KEY_TYPE" cert never &>/gpg.log || die "Failed to create key." 100
   rcStat $?
   KEYID=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^pub:/ { print $5; exit }')
   KEYFP=$(gpg -k --with-colons "$IDENTITY" | awk -F: '/^fpr:/ { print $10; exit }')
+  echo -e "$PURPLE"
   printf "\nKey ID: %40s\nKey FP: %40s\n\n" "$KEYID" "$KEYFP"
+  echo -e "$NOCOL"
   info "Certify key created successfully.\n"
   info "This was gpg's output:\n"
-  echo -e "\033[34m"
+  echo -e "$PURPLE"
   cat /gpg.log
-  echo -e "\033[m"
+  echo -e "$NOCOL"
   info "Backing up certify key to $GNUPGHOME/$KEYID-Certify.key: "
   gpg --output $GNUPGHOME/$KEYID-Certify.key --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --armor --export-secret-keys $KEYID
   rcStat $?
@@ -143,11 +158,13 @@ function pgpMakeEASkeys(){
     rcStat $?
   done
   info "This was gpg's output:\n"
-  echo -e "\033[34m"
+  echo -e $PURPLE
   cat /gpg.log
-  echo -e "\033[m"
+  echo -e $NOCOL
   info "The following keys do now exist: \n"
+  echo -e "$PURPLE"
   gpg -K
+  echo -e "$NOCOL"
   info "Backing up subkeys to $GNUPGHOME/$(date +%Y-%m-%d)_$KEYID-Subkeys.key: "
   gpg --output $GNUPGHOME/$(date +%Y-%m-%d)_$KEYID-Subkeys.key --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --armor --export-secret-subkeys $KEYID
   rcStat $?
@@ -204,16 +221,6 @@ function pgpChgKeyExp(){
   read -p "Please enter expiration in years: " EXP
   info "Starting key edit: " 
   gpg --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --quick-set-expire "$KEYFP" "$EXP" "*" &>/dev/null
-#  gpg --command-fd=0 --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --edit-key $KEYID &>/dev/null <<EOF
-#key 1
-#key 2
-#key 3
-#expire
-#y
-#${EXP}y
-#y
-#save
-#EOF
   if rcStat $?
   then
     pgpExportKey $(date +%Y-%m-%d).pub.asc
@@ -266,8 +273,8 @@ EOF
       then
         grep -v PIN $GNUPGHOME/yubikey-$ykserial.txt > $GNUPGHOME/temp && mv $GNUPGHOME/temp $GNUPGHOME/yubikey-$ykserial.txt
           cat <<EOF >>$GNUPGHOME/yubikey-$ykserial.txt
-Admin PIN:        $APIN
 Initial user PIN: $UPIN
+Admin PIN:        $APIN
 EOF
       else
          cat <<EOF >$GNUPGHOME/yubikey-$ykserial.txt
@@ -275,8 +282,8 @@ Serial#:          $ykserial
 Cardholder Name:  $YKCHOLDER 
 Cardholder Email: $YKLOGIN
 PGP Key ID:       0x$KEYID
-Admin PIN:        $APIN
 Initial user PIN: $UPIN
+Admin PIN:        $APIN
 EOF
       fi
     fi
@@ -292,9 +299,13 @@ function ykReset(){
   if [ "$REPLY" = "YES" ]
   then
     info "Resetting yubikey: " 
-    out=$(echo "y" | ykman openpgp reset 2>/dev/null)
-    rcStat $?
-    echo $out
+    echo "y" | ykman openpgp reset &>/dev/null
+    if rcStat $?
+    then
+      info "New user PIN: ${RED}1234$NOCOL\n"
+      info "New admin PIN: ${RED}12345678$NOCOL\n"
+      info "Reset code: ${RED}NOT SET$NOCOL\n"
+    fi
     rm $GNUPGHOME/yubikey-$ykserial.txt &>/dev/null
   fi
 }
@@ -399,7 +410,7 @@ fi
 
 while :
 do
-  echo -e "\033[36m" >&2
+  echo -e "$CYAN" >&2
   cat <<EOF >&2
   Please choose from the following options:
   1) Create a new certification key
@@ -417,7 +428,7 @@ do
   s) Open an interactive shell
   e) Clean up and exit 
 EOF
-  echo -e "\033[m"
+  echo -e "$NOCOL"
   read -n 1 -p "Your choice: " cmd
   echo >&2
   case $cmd in
@@ -442,12 +453,12 @@ EOF
     ;;
     "3")
       info "The following keys are currently in your keyring: \n"
-      echo -e "\033[34m"
+      echo -e "$PURPLE"
       gpg -K
-      echo -e "\033[m"
+      echo -e "$NOCOL"
     ;;
     "4")
-      pgpExportKey
+      pgpExportKey pub.asc
     ;;
     "5")
       ykReset
@@ -476,9 +487,9 @@ EOF
         if [ -r $GNUPGHOME/yubikey-$ykserial.txt ]
         then
           info "This is the configuration of currently detected yubikey:\n"
-          echo -e "\033[36m"
+          echo -e "$PURPLE"
           cat $GNUPGHOME/yubikey-$ykserial.txt
-          echo -e "\033[m"
+          echo -e "$NOCOL"
         else
           warn "No configuration found for key with serial $ykserial!\n"
         fi
@@ -486,13 +497,13 @@ EOF
     ;;
     "P")
       info "These are the configurations of all currently known yubikeys:\n"
-      echo -e "\033[36m"
+      echo -e "$PURPLE"
       for f in $GNUPGHOME/yubikey-*.txt
       do
         echo "===================="
         cat $f
       done
-      echo -e "\033[m"
+      echo -e "$NOCOL"
     ;;
     s)
       info "Entering Shell.\n"
