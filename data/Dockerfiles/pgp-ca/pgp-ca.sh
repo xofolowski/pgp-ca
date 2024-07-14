@@ -294,6 +294,12 @@ EOF
       fi
     fi
   fi
+  info "Configuring Yubikey to require touch for signing:"
+  ykman openpgp keys set-touch -a $APIN -f sig Cached  &>/dev/null
+  rcStat $?
+  info "Configuring Yubikey to require touch for authentication:"
+  ykman openpgp keys set-touch -a $APIN -f sig Cached &>/dev/null
+  rcStat $?
 }
 
 function ykReset(){
@@ -420,14 +426,28 @@ fi
 
 while :
 do
-  echo -e "$CYAN" >&2
+  clear
+  echo -e "$PURPLE"
+  cat << "EOF" >&2
+++==================================================================++
+||   .______.     ______ .______.            ______       .         ||
+||   |_   __ \  .' ___  ||_   __ \         .' ___  |     / \        ||
+||     | |__) |/ .'   \_|  | |__) |______ / .'   \_|    / _ \       ||
+||     |  ___/ | |   ____  |  ___/|______|| |          / ___ \      ||
+||    _| |_    \ `.___]  |_| |_           \ `.___.'\ _/ /   \ \_    ||
+||   |_____|    `._____.'|_____|           `.____ .'|____| |____|   ||
+||                                                                  ||
+++==================================================================++
+EOF
+  echo -e "$CYAN"
   cat <<EOF >&2
-  Please choose from the following options:
+Please choose from the following options:
+
   1) Create a new certification key
   2) Create and certify new EAS subkeys
   3) List keys in keyring
   4) Export public key
-  5) Reset yubikey to factory default 
+  5) Reset yubikey's openpgp app to factory default 
   6) Set yubikey PINs
   7) Provision keys to yubikey
   8) Export keys to keyserver
@@ -524,4 +544,7 @@ EOF
       error "Command not recognized!\n"
     ;;
   esac
+  echo
+  echo -e "$PURPLE"
+  read -n 1 -p "Press any key to continue:"
 done
