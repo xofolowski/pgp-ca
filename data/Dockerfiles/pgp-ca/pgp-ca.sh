@@ -224,7 +224,10 @@ function pgpChgKeyExp(){
   info "Going to extend lifetime of your EAS subkeys.\n"
   read -s -p "Please provide certify key's passphrase: " CERTIFY_PASS
   echo
-  read -p "Please enter expiration in years: " EXP
+  info "  Hint: Provide expiry date in one of the following formats:\n"
+  info "   - YYYY-MM-DD\n"
+  info "   - X[d|w|y]; e.g. '5y' for expiration in 5 years from now, '3w' 3 weeks from now, ...\n"
+  read -p "Please enter expiration date: " EXP
   info "Starting key edit: " 
   gpg --batch --pinentry-mode=loopback --passphrase "$CERTIFY_PASS" --quick-set-expire "$KEYFP" "$EXP" "*" &>/dev/null
   if rcStat $?
@@ -295,10 +298,10 @@ EOF
     fi
   fi
   info "Configuring Yubikey to require touch for signing:"
-  ykman openpgp keys set-touch -a $APIN -f sig Cached  &>/dev/null
+  ykman openpgp keys set-touch -a $APIN -f sig on  &>/dev/null
   rcStat $?
   info "Configuring Yubikey to require touch for authentication:"
-  ykman openpgp keys set-touch -a $APIN -f sig Cached &>/dev/null
+  ykman openpgp keys set-touch -a $APIN -f aut on &>/dev/null
   rcStat $?
 }
 
@@ -422,6 +425,8 @@ then
 else
   info "Starting up - initializing Keystore\n"
   initialize
+  info "Press <enter> to continue: "
+  read
 fi
 
 while :
