@@ -91,7 +91,7 @@ function initialize(){
   mount /dev/mapper/keyringvol $GNUPGHOME || die "Failed to mount KEYVOL." 1
   rcStat $?
   info "  Preparing GPG config: "
-  cp /gpg.conf $GNUPGHOME/ &>/dev/null || die "Failed to prepare GPG config." 1
+  cp /*.conf $GNUPGHOME/ &>/dev/null || die "Failed to prepare GPG config." 1
   rcStat $?
   info "This is the keystore's encryption passphrase: $RED$PASSPHRASE$NOCOL\n"
   warn "Make sure to note this passphrase down and store it securely!\n"
@@ -441,6 +441,9 @@ do
 ||     |  ___/ | |   ____  |  ___/|______|| |          / ___ \      ||
 ||    _| |_    \ `.___]  |_| |_           \ `.___.'\ _/ /   \ \_    ||
 ||   |_____|    `._____.'|_____|           `.____ .'|____| |____|   ||
+||                                                                  ||
+||                                         (c) 2024 Christoph Bott  ||
+||                                             pgpca@xof.devroot.de ||
 ||                                                                  ||
 ++==================================================================++
 EOF
